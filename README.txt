@@ -17,6 +17,8 @@ documents the most important things about them:
 This is inpsired from nmap-exp/d33tah/README.txt. Liked how thorough
 it is.
 
+LICENSE "Same as Nmap--See http://nmap.org/book/man-legal.html"
+
 Current directories
 ----------------
 
