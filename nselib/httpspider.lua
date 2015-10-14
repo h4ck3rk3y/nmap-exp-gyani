@@ -415,8 +415,7 @@ URL = {
 
   --- Creates a new instance of URL
   -- @param url string containing the text representation of a URL
-  -- @return o instance of URL, in case of parsing being successful
-  --         nil in case parsing fails
+  -- @return o instance of URL, if parsing was successful
   new = function(self, url)
     local o = {
       raw = url,
@@ -755,7 +754,7 @@ Crawler = {
       end )
   end,
 
-  -- does the heavy crawling
+  --- Does the heavy crawling.
   --
   -- The crawler may exit due to a number of different reasons, including
   -- invalid options, reaching max count or simply running out of links
@@ -911,7 +910,7 @@ Crawler = {
 
   end,
 
-  -- Loads the argument on a library level
+  --- Loads the argument on a library level
   loadLibraryArguments = function(self)
     local ln = LIBRARY_NAME
 
@@ -941,7 +940,7 @@ Crawler = {
     end
   end,
 
-  -- Loads any defaults for arguments that were not set
+  --- Loads any defaults for arguments that were not set
   loadDefaultArguments = function(self)
     local function tobool(b)
       if ( nil == b ) then
@@ -994,7 +993,7 @@ Crawler = {
     self.url = self.url or '/'
   end,
 
-  -- gets a string of limitations imposed on the crawl
+  --- Gets a string of limitations imposed on the crawl
   getLimitations = function(self)
     local o = self.options
     local limits = {}
@@ -1040,6 +1039,7 @@ Crawler = {
   end,
 
   --- Signals the crawler to stop crawling.
+  -- @param self The crawler instance.
   stop = function(self)
     local condvar = nmap.condvar(self.response_queue)
     self.quit = true
