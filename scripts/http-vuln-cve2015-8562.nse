@@ -42,18 +42,58 @@ function action (host, port)
   local vulnerable = false
   local normalized_path = nil
   local joomla_version = nil
+  local ubuntu_version = nil
+  local is_deb=nil
+  local is_php_vulnerable=nil
 
   local response = http.get(host, port, path)
-
   if response and response.status ~= 200 then
     return nil
   end
 
+  -- what if this header is removed?
   if not response.header['x-powered-by'] then
     return nil
   else
-    php_version =  string.match(response.header['x-powered-by'],'%d%.%d%.%d+')
+    php_version =  string.match(response.header['x-powered-by'],'PHP%/([%d%.]+)')
+    ubuntu_version = string.match(response.header['x-powered-by'],'ubuntu([%d%.]+)') or false
+    is_deb = string.match(response.header['x-powered-by'],'deb') or false
+    stdnse.debug1(php_version)
+    stdnse.debug1(response.header['x-powered-by'])
   end
+
+  if is_deb then
+    if php_version > '5.4.45' then
+      is_php_vulnerable=false
+    --confirm the below check once
+    elseif php_version > '5.4.45' and response.header['x-powered-by']:match('7[u%.]1') then
+      is_php_vulnerable=false
+    else
+      is_php_vulnerable=true
+    end
+  elseif ubuntu_version then
+    if php_version > '5.5.9' then
+      is_php_vulnerable=false
+    elseif php_version=='5.5.9' and ubuntu_version >= '4.13' then
+      is_php_vulnerable=false
+    elseif php_version=='5.3.10' and ubuntu_version >= '3.20' then
+      is_php_vulnerable=false
+    else
+      is_php_vulnerable=true
+    end
+  elseif php_version < '5.4.44' then
+    is_php_vulnerable=true
+  elseif php_version>= '5.5.0' and php_version<='5.5.28' then
+    is_php_vulnerable=true
+  elseif php_version>= '5.6.0' and php_version<='5.6.12' then
+    is_php_vulnerable=true
+  end
+
+  if not is_php_vulnerable then
+    stdnse.debug1('This version of PHP looks safe!')
+    return nil
+  end
+        
 
   local paths = {'/', '/administartor/'}
   local joomla_and_online = false
@@ -106,6 +146,8 @@ function action (host, port)
     }
 
     local report = vulns.Report:new(SCRIPT_NAME, host, port)
+
+
     return report:make_output(vuln_table)
   end
 
