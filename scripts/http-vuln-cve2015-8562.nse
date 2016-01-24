@@ -52,6 +52,7 @@ function action (host, port)
   local exploit = stdnse.get_script_args(SCRIPT_NAME .. ".exploiot") or false
   local command = stdnse.get_script_args(SCRIPT_NAME .. ".command") or 'phpinfo()'
   local response = http.get(host, port, path)
+  stdnse.debug1(response.status)
   if response and response.status ~= 200 then
     return nil
   end
@@ -99,7 +100,6 @@ function action (host, port)
     stdnse.debug1('This version of PHP looks safe!')
     return nil
   end
-        
 
   local paths = {'/', '/administartor/'}
   local joomla_and_online = false
@@ -154,7 +154,6 @@ function action (host, port)
       storage of unsanitized headers in session data.]]
     }
 
-    
     if exploit then
       options = {}
       local random_string = stdnse.generate_random_string(5):upper()
