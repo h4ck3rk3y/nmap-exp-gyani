@@ -247,7 +247,7 @@ storage of unsanitized headers in session data.]]
 	      	local report = vulns.Report:new(SCRIPT_NAME, host, port)
       		return report:make_output(vuln_table)
       	else
-      		vuln_table.extra_info = response.body:match(left_pad .. '(.+)' .. right_pad)
+      		vuln_table.exploit_results = response.body:match(left_pad .. '(.+)' .. right_pad)
       		local report = vulns.Report:new(SCRIPT_NAME, host, port)
       		return report:make_output(vuln_table)
       	end
