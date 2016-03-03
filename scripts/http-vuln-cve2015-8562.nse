@@ -210,7 +210,9 @@ function action (host, port)
 
   -- either we have a vulnerable version of joomla or override set to true.
   if override or joomla_version < '3.4.6' then
-    stdnse.debug('Joomla! Version %s', joomla_version)
+    if not override then
+      stdnse.debug('Joomla! Version %s', joomla_version)
+    end
     local vuln_table = {
       title = "Joomla! remote code execution due to unsanitized HTTP headers",
       state = vulns.STATE.VULN,
